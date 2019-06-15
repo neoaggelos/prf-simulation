@@ -161,7 +161,8 @@ class Simulation:
             # time of finish
             start = e.time if self.server_up else self.next_uptime
 
-            self.next_finish[e.param] = start + erlangk(PARAM_S, PARAM_k)
+            D = erlangk(PARAM_S, PARAM_k)
+            self.next_finish[e.param] = start + D
             self.next_arrival[e.param] = np.inf
             self.last_arrival[e.param] = e.time
 
@@ -181,9 +182,10 @@ class Simulation:
             self.next_uptime = self.next_downtime + exp(PARAM_B)
 
             if self.num_clients == 0 and self.response_times:
-                logging.info('New cycle')
                 cycle = Cycle(duration=e.time - self.cycle_start,
                               response_times=self.response_times)
+
+                logging.info(cycle)
 
                 self.cycles.append(cycle)
                 self.response_times = []
@@ -207,8 +209,5 @@ s = Simulation()
 
 for _ in range(500000):
     s.handle_event()
-
-for x in s.cycles:
-    logging.info(x)
 
 logging.info(f'Completed {len(s.cycles)} cycles')
