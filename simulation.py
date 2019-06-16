@@ -191,8 +191,7 @@ class Simulation:
             # time of finish
             start = e.time if self.server_up else self.next_uptime
 
-            D = erlangk(PARAM_S, PARAM_k)
-            self.next_finish[e.param] = start + D
+            self.next_finish[e.param] = start + erlangk(PARAM_S, PARAM_k)
             self.next_arrival[e.param] = np.inf
             self.last_arrival[e.param] = e.time
 
