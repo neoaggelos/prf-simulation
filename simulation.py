@@ -3,12 +3,13 @@
 ########################################################################################################
 # Author            : Aggelos Kolaitis <neoaggelos@gmail.com>
 # Description       : Simulation program
-# Requires          : python3, numpy
+# Requires          : python3, numpy, scipy
 # Last Update       : 2019-06-15
 # Usage             :
 ########################################################################################################
 
 import numpy as np
+import scipy.stats
 from typing import Any
 import logging
 
@@ -21,13 +22,33 @@ logging.basicConfig(level=logging.DEBUG)
 SEED = 1123412341
 np.random.seed(SEED)
 
-# Exp(S)
 def exp(*args, **kwargs):
+    '''Exp(S)'''
     return np.random.exponential(*args, **kwargs)
 
-# Erlang-k(S) = sum_of_k_independent( Exp(S/k) )
+
 def erlangk(S, k):
+    '''Erlang-k(S) = sum_of_k_independent( Exp(S/k) )'''
     return np.sum(exp(S/k, size=k))
+
+
+def converge_interval(y, c, a = 0.05):
+    '''Given Y, C --> return (R, s*z(1-a/2)/cbar*sqrt(n))'''
+    n = len(y)
+
+    ybar = np.average(y)
+    cbar = np.average(c)
+
+    R = ybar / cbar
+    S_YY = 1/(n-1) * np.sum((y - ybar) ** 2)
+    S_CC = 1/(n-1) * np.sum((c - cbar) ** 2)
+    S_YC = 1/(n-1) * np.sum((y - ybar) * (c - cbar))
+    s = np.sqrt(S_YY + S_CC*R*R - 2*R*S_YC)
+
+    # find z(1-a/2) point of Student(n-1)
+    z = scipy.stats.t.ppf(1-a/2, n-1)
+
+    return (R, s*z/(np.sqrt(n)*cbar))
 
 
 ####################################################################
@@ -121,6 +142,15 @@ class Simulation:
         # list of completed cycles (as Cycle objects)
         self.cycles = []
 
+        # final result
+        self.converged = False
+
+        # confidence interval for R
+        self.R = (-np.inf, np.inf)
+
+        # confidence interval for X
+        self.X = (-np.inf, np.inf)
+
 
     def get_next_event(self):
         '''return next event'''
@@ -191,6 +221,9 @@ class Simulation:
                 self.response_times = []
                 self.cycle_start = e.time
 
+                if len(self.cycles) % 20 == 0:
+                    self.check_convergence()
+
         elif e.type == 'finish':
             # assert self.server_up == True
             # assert self.last_arrival[e.param] is not np.inf
@@ -205,9 +238,39 @@ class Simulation:
             self.next_arrival[e.param] = e.time + exp(PARAM_Z)
             self.next_finish[e.param] = np.inf
 
-s = Simulation()
 
-for _ in range(500000):
-    s.handle_event()
+    def check_convergence(self):
+        '''calculate convergence intervals for R and X'''
+        # For throughput
+        y = np.array([len(c.response_times) for c in self.cycles])
+        c = np.array([c.duration for c in self.cycles])
+        Xmean, Xiv = converge_interval(y, c)
+        self.X = (Xmean - Xiv, Xmean + Xiv)
 
-logging.info(f'Completed {len(s.cycles)} cycles')
+        # For response times
+        y = np.array([np.sum(c.response_times) for c in self.cycles])
+        c = np.array([len(c.response_times) for c in self.cycles])
+        Rmean, Riv = converge_interval(y, c)
+        self.R = (Rmean - Riv, Rmean + Riv)
+
+        print('After', len(y), 'cycles')
+        print('X =', self.X)
+        print('R =', self.R)
+
+        # Check convergence
+        self.converged = (2*Riv < (Rmean/10)) or len(self.cycles) > 1000
+
+
+    def run(self):
+        '''run simulation'''
+
+        while not s.converged:
+            s.handle_event()
+
+
+####################################################################
+# State and initialization
+
+if __name__ == '__main__':
+    s = Simulation()
+    s.run()
