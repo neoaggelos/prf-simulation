@@ -257,7 +257,7 @@ class Simulation:
         print('R =', self.R)
 
         # Check convergence
-        self.converged = (2*Riv < (Rmean/10)) or len(self.cycles) > 1000
+        self.converged = (2*Riv < (Rmean/50)) or len(self.cycles) > 1000
 
 
     def run(self):
